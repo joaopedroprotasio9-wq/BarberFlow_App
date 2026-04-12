@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: barbershops
+    // Fields: name (string), ownerUid (string), email (string), subscriptionStatus (string), createdAt (timestamp)
+    //
+    // Collection: clients
+    // Fields: name (string), phone (string), lastVisit (timestamp), visitCount (int), totalSpent (number), points (int), barbershopId (string)
+    //
+    // Collection: appointments
+    // Fields: clientId (string), clientName (string), serviceName (string), price (number), startTime (timestamp), endTime (timestamp), status (string), barbershopId (string)
+    //
+    // Collection: products
+    // Fields: name (string), price (number), stock (int), minStock (int), barbershopId (string)
+    //
+    // Collection: sales
+    // Fields: productId (string), productName (string), quantity (int), totalPrice (number), date (timestamp), barbershopId (string)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(barbershopId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/barbershops/$(barbershopId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Barbershops
+    match /barbershops/{barbershopId} {
+      allow read: if true; // Publicly readable for booking
+      allow create: if isAuthenticated() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.ownerUid == request.auth.uid;
+      
+      // Sub-collections
+      match /clients/{clientId} {
+        allow read: if true; // Allow public to check if they are already a client
+        allow create: if true; // Allow public to register as client
+        allow update, delete: if isOwner(barbershopId);
+      }
+      
+      match /appointments/{appointmentId} {
+        allow read: if true; // Publicly readable to check availability
+        allow create: if true; // Allow public to book
+        allow update, delete: if isOwner(barbershopId);
+      }
+      
+      match /services/{serviceId} {
+        allow read: if true; // Publicly readable
+        allow write: if isOwner(barbershopId);
+      }
+      
+      match /products/{productId} {
+        allow read, write: if isOwner(barbershopId);
+      }
+      
+      match /sales/{saleId} {
+        allow read, write: if isOwner(barbershopId);
+      }
+    }
+  }
+}

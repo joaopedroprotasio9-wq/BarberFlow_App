@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "barbershop": {
+      "title": "Barbearia",
+      "description": "Dados da conta da barbearia (SaaS multiusuário)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome da barbearia" },
+        "slug": { "type": "string", "description": "URL handle" },
+        "ownerUid": { "type": "string", "description": "UID do proprietário (Firebase Auth)" },
+        "email": { "type": "string", "format": "email" },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "trial", "expired", "past_due", "canceled", "unpaid"] },
+        "stripeCustomerId": { "type": "string" },
+        "stripeSubscriptionId": { "type": "string" },
+        "subscriptionEndDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "businessHours": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string" },
+            "end": { "type": "string" }
+          }
+        }
+      },
+      "required": ["name", "slug", "ownerUid", "email", "subscriptionStatus", "createdAt"]
+    },
+    "service": {
+      "title": "Serviço",
+      "description": "Serviços oferecidos pela barbearia",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "duration": { "type": "integer" },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["name", "price", "duration", "barbershopId"]
+    },
+    "client": {
+      "title": "Cliente",
+      "description": "Cadastro de clientes da barbearia",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "lastVisit": { "type": "string", "format": "date-time" },
+        "visitCount": { "type": "integer" },
+        "totalSpent": { "type": "number" },
+        "points": { "type": "integer", "description": "Pontos de fidelidade" },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["name", "phone", "barbershopId"]
+    },
+    "appointment": {
+      "title": "Agendamento",
+      "description": "Agenda de serviços",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "price": { "type": "number" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["clientId", "startTime", "status", "barbershopId"]
+    },
+    "product": {
+      "title": "Produto",
+      "description": "Estoque de produtos",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "integer" },
+        "minStock": { "type": "integer" },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["name", "price", "stock", "barbershopId"]
+    },
+    "sale": {
+      "title": "Venda",
+      "description": "Registro de vendas de produtos",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "quantity": { "type": "integer" },
+        "totalPrice": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["productId", "quantity", "totalPrice", "date", "barbershopId"]
+    }
+  },
+  "firestore": {
+    "/barbershops/{barbershopId}": {
+      "schema": "barbershop",
+      "description": "Configurações e dados da barbearia"
+    },
+    "/barbershops/{barbershopId}/clients/{clientId}": {
+      "schema": "client",
+      "description": "Clientes vinculados à barbearia"
+    },
+    "/barbershops/{barbershopId}/appointments/{appointmentId}": {
+      "schema": "appointment",
+      "description": "Agendamentos da barbearia"
+    },
+    "/barbershops/{barbershopId}/products/{productId}": {
+      "schema": "product",
+      "description": "Produtos em estoque"
+    },
+    "/barbershops/{barbershopId}/sales/{saleId}": {
+      "schema": "sale",
+      "description": "Vendas realizadas"
+    }
+  }
+}
