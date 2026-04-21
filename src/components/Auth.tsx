@@ -12,12 +12,24 @@ export function Auth() {
   const [error, setError] = useState('');
 
   const handleGoogleSignIn = async () => {
+    setError('');
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    
     try {
       await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error(err);
-      setError('Erro ao entrar com Google');
+    } catch (err: any) {
+      console.error('Erro detalhado login Google:', err);
+      
+      if (err.code === 'auth/operation-not-allowed') {
+        setError('O login com Google não está ativado no Firebase Console. Vá em Authentication > Sign-in method e ative o Google.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError('A janela de login foi fechada antes de completar.');
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        setError('Aguarde, já existe uma janela de login aberta.');
+      } else {
+        setError(`Erro ao entrar com Google: ${err.message || 'Erro desconhecido'}`);
+      }
     }
   };
 
