@@ -39,6 +39,7 @@ async function setupServer() {
     let event: Stripe.Event;
 
     try {
+      const stripe = getStripe();
       if (webhookSecret && typeof sig === 'string') {
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
       } else {
