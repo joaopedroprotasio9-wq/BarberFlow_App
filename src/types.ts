@@ -4,7 +4,7 @@ export interface Barbershop {
   slug: string; // URL handle
   ownerUid: string;
   email: string;
-  subscriptionStatus: 'active' | 'trial' | 'expired' | 'past_due' | 'canceled' | 'unpaid';
+  subscriptionStatus: 'active' | 'trial' | 'expired' | 'past_due' | 'canceled' | 'unpaid' | 'inactive';
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   subscriptionEndDate?: string;

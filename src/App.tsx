@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -19,15 +20,16 @@ import { Auth } from './components/Auth';
 import { PublicBooking } from './components/PublicBooking';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { Barbershop } from './types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 function AdminApp({ user, barbershop }: { user: User, barbershop: Barbershop }) {
   const [currentTab, setCurrentTab] = useState('dashboard');
 
   // Subscription Guard
-  const isSubscribed = barbershop.subscriptionStatus === 'active' || barbershop.subscriptionStatus === 'trial';
+  const isSubscribed = barbershop.subscriptionStatus === 'active';
+  const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
 
-  if (!isSubscribed) {
+  if (!isSubscribed || isExpired) {
     return <SubscriptionPage barbershop={barbershop} />;
   }
 
@@ -55,6 +57,8 @@ export default function App() {
   const [barbershop, setBarbershop] = useState<Barbershop | null>(null);
   const [loading, setLoading] = useState(true);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -68,15 +72,20 @@ export default function App() {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user ? 'Logged in' : 'Logged out');
       setUser(user);
       if (user) {
         const path = `barbershops/${user.uid}`;
         try {
+          console.log('Fetching barbershop data...');
           const docRef = doc(db, 'barbershops', user.uid);
           const docSnap = await getDoc(docRef);
+          
           if (docSnap.exists()) {
+            console.log('Barbershop found:', docSnap.data());
             setBarbershop({ id: docSnap.id, ...docSnap.data() } as Barbershop);
           } else {
+            console.log('Barbershop not found, creating new profile...');
             // New user, create barbershop profile
             const slug = (user.displayName || 'barbearia').toLowerCase().replace(/\s+/g, '-');
             const newBarbershop: Partial<Barbershop> = {
@@ -84,15 +93,18 @@ export default function App() {
               slug: `${slug}-${Math.random().toString(36).substring(2, 5)}`,
               ownerUid: user.uid,
               email: user.email || '',
-              subscriptionStatus: 'trial',
+              subscriptionStatus: 'inactive',
               createdAt: new Date().toISOString(),
               businessHours: { start: '09:00', end: '18:00' }
             };
             await setDoc(docRef, newBarbershop);
+            console.log('New barbershop created successfully');
+            setIsNewUser(true);
             setBarbershop({ id: user.uid, ...newBarbershop } as Barbershop);
           }
-        } catch (err) {
-          console.error('Error fetching barbershop:', err);
+        } catch (err: any) {
+          console.error('Error fetching/creating barbershop:', err);
+          setError(`Erro no Firestore: ${err.message || 'Erro desconhecido'}. Verifique as Regras de Segurança.`);
           try {
             handleFirestoreError(err, OperationType.GET, path);
           } catch (e) {}
@@ -114,6 +126,34 @@ export default function App() {
           <p className="text-zinc-500 text-sm animate-pulse">
             {verifyingPayment ? 'Verificando pagamento...' : 'Carregando BarberFlow...'}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && barbershop && barbershop.subscriptionStatus === 'inactive') {
+    return <SubscriptionPage barbershop={barbershop} />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Erro de Conexão</h2>
+          <p className="text-zinc-400 text-sm mb-6">
+            Não conseguimos carregar os dados da sua barbearia. Verifique sua conexão ou as configurações do Firebase.
+          </p>
+          <div className="text-[10px] text-zinc-500 bg-black/30 p-3 rounded-lg mb-6 text-left break-all">
+            {error}
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Recarregar App
+          </button>
         </div>
       </div>
     );

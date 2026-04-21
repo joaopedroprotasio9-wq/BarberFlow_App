@@ -4,52 +4,167 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import admin from 'firebase-admin';
+import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock', {
-  apiVersion: '2025-01-27.acacia' as any,
-});
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+}
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const db = admin.firestore();
+
+const getStripe = () => {
+  const key = process.env.STRIPE_SECRET_KEY || 'sk_test_mock';
+  return new Stripe(key, {
+    apiVersion: '2025-01-27.acacia' as any,
+  });
+};
+
+const app = express();
+
+async function setupServer() {
+  // Webhook needs raw body
+  app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event: Stripe.Event;
+
+    try {
+      if (webhookSecret && typeof sig === 'string') {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        event = JSON.parse(req.body.toString());
+      }
+    } catch (err: any) {
+      console.error(`Webhook Error: ${err.message}`);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const barbershopId = session.metadata?.barbershopId;
+          if (barbershopId) {
+            await db.collection('barbershops').doc(barbershopId).update({
+              subscriptionStatus: 'active',
+              stripeCustomerId: session.customer as string,
+              stripeSubscriptionId: session.subscription as string,
+              subscriptionEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+          }
+          break;
+        }
+        case 'customer.subscription.deleted':
+        case 'customer.subscription.updated': {
+          const subObj = event.data.object as any;
+          let targetId = subObj.metadata?.barbershopId;
+          
+          if (!targetId) {
+            const snapshot = await db.collection('barbershops')
+              .where('stripeCustomerId', '==', subObj.customer)
+              .limit(1)
+              .get();
+            if (!snapshot.empty) targetId = snapshot.docs[0].id;
+          }
+
+          if (targetId) {
+            const status = subObj.status === 'active' ? 'active' : 'inactive';
+            await db.collection('barbershops').doc(targetId).update({
+              subscriptionStatus: status,
+              subscriptionEndDate: new Date(subObj.current_period_end * 1000).toISOString(),
+            });
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('Error processing webhook event:', err);
+    }
+
+    res.json({ received: true });
+  });
 
   app.use(express.json());
 
   // Stripe Checkout Session
   app.post('/api/create-checkout-session', async (req, res) => {
     const { barbershopId, email } = req.body;
+    const currentKey = process.env.STRIPE_SECRET_KEY || '';
+    const priceId = process.env.STRIPE_PRICE_ID || 'price_1TL4K9HHbAQf2f29FrNUzAe9';
 
     try {
+      console.log('Iniciando criação de sessão Stripe para:', { barbershopId, email, priceId });
+      const isSecretKey = currentKey.startsWith('sk_') || currentKey.startsWith('rk_');
+      if (!isSecretKey) {
+        throw new Error('CONFIG_ERROR: A chave configurada não é uma chave secreta válida. Use uma chave que comece com "sk_" ou "rk_".');
+      }
+
+      const stripe = getStripe();
+      
+      // Se tivermos um Price ID nas configurações, usamos ele. 
+      // Caso contrário, criamos um item dinâmico como fallback.
+      const lineItem = priceId ? {
+        price: priceId,
+        quantity: 1,
+      } : {
+        price_data: {
+          currency: 'brl',
+          product_data: {
+            name: 'BarberFlow Pro',
+            description: 'Assinatura Mensal - Acesso Total',
+          },
+          unit_amount: 2990, // R$ 29,90
+          recurring: {
+            interval: 'month',
+          },
+        },
+        quantity: 1,
+      };
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'brl',
-              product_data: {
-                name: 'BarberFlow Pro - Mensal',
-                description: 'Acesso completo ao sistema de gestão BarberFlow',
-              },
-              unit_amount: 4990, // R$ 49,90
-              recurring: {
-                interval: 'month',
-              },
-            },
-            quantity: 1,
-          },
-        ],
+        line_items: [lineItem],
         mode: 'subscription',
-        success_url: `${req.headers.origin}/?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.origin}/subscription`,
+        success_url: `${req.headers.origin || 'https://' + req.headers.host}/?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.origin || 'https://' + req.headers.host}/subscription`,
         customer_email: email,
         metadata: {
           barbershopId,
         },
+        subscription_data: {
+          metadata: {
+            barbershopId,
+          }
+        }
+      });
+
+      console.log('Sessão Stripe criada com sucesso:', session.url);
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error('ERRO NO STRIPE CHECKOUT:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Stripe Customer Portal
+  app.post('/api/create-portal-session', async (req, res) => {
+    const { customerId } = req.body;
+
+    try {
+      const stripe = getStripe();
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: `${req.headers.origin}/`,
       });
 
       res.json({ url: session.url });
@@ -72,10 +187,14 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+}
 
+// Only start the server if this file is run directly
+const PORT = 3000;
+setupServer().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
-}
+});
 
-startServer();
+export default app;

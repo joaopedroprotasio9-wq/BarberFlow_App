@@ -1,5 +1,5 @@
-import React from 'react';
-import { LayoutDashboard, Calendar, Users, Package, DollarSign, LogOut, Menu, X, Scissors } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, Calendar, Users, Package, DollarSign, LogOut, Menu, X, Scissors, CreditCard, Loader2 } from 'lucide-react';
 import { auth } from '../firebase';
 import { Barbershop } from '../types';
 import { cn } from '../lib/utils';
@@ -13,6 +13,30 @@ interface LayoutProps {
 
 export function Layout({ children, currentTab, setCurrentTab, barbershop }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [loadingPortal, setLoadingPortal] = useState(false);
+
+  const handleManageSubscription = async () => {
+    if (!barbershop.stripeCustomerId) {
+      alert('Informações de pagamento não encontradas.');
+      return;
+    }
+
+    setLoadingPortal(true);
+    try {
+      const response = await fetch('/api/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: barbershop.stripeCustomerId }),
+      });
+      const { url } = await response.json();
+      window.location.href = url;
+    } catch (err) {
+      console.error('Error opening portal:', err);
+      alert('Erro ao abrir portal de gerenciamento.');
+    } finally {
+      setLoadingPortal(false);
+    }
+  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -78,6 +102,14 @@ export function Layout({ children, currentTab, setCurrentTab, barbershop }: Layo
             </nav>
 
             <div className="mt-auto pt-6 border-t border-zinc-800">
+              <button 
+                onClick={handleManageSubscription}
+                disabled={loadingPortal}
+                className="w-full flex items-center gap-3 px-4 py-3 mb-2 rounded-xl text-zinc-400 hover:bg-blue-500/10 hover:text-blue-500 transition-all duration-200"
+              >
+                {loadingPortal ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+                <span className="font-medium">Assinatura</span>
+              </button>
               <div className="flex items-center gap-3 mb-6 px-2">
                 <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
                   {barbershop.name.charAt(0)}

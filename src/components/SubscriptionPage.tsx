@@ -6,10 +6,18 @@ import { Check, Loader2, CreditCard, ShieldCheck, Zap, LogOut } from 'lucide-rea
 
 interface SubscriptionPageProps {
   barbershop: Barbershop;
+  autoStart?: boolean;
 }
 
-export function SubscriptionPage({ barbershop }: SubscriptionPageProps) {
+export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProps) {
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(autoStart || false);
+
+  React.useEffect(() => {
+    if (autoStart) {
+      handleSubscribe();
+    }
+  }, [autoStart]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -17,29 +25,36 @@ export function SubscriptionPage({ barbershop }: SubscriptionPageProps) {
 
   const handleSubscribe = async () => {
     setLoading(true);
+    setRedirecting(true);
     try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          barbershopId: barbershop.id,
-          email: barbershop.email,
-        }),
-      });
-
-      const { url, error } = await response.json();
-      if (error) throw new Error(error);
-      
-      window.location.href = url;
+      console.log('Redirecionando para o Link de Pagamento Stripe');
+      // Redireciona diretamente para o Link de Pagamento que você criou
+      window.location.href = 'https://buy.stripe.com/bJedR9eLq8q2ebF3VcaIM01';
     } catch (err) {
-      console.error('Error creating checkout session:', err);
+      console.error('Erro ao redirecionar:', err);
+      setRedirecting(false);
       alert('Erro ao iniciar pagamento. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (redirecting) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-6 text-center">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+            <CreditCard className="w-8 h-8 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-2">Redirecionando para o Checkout</h2>
+            <p className="text-zinc-500">Estamos preparando seu ambiente de pagamento seguro...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
@@ -60,10 +75,10 @@ export function SubscriptionPage({ barbershop }: SubscriptionPageProps) {
               BarberFlow Pro
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
-              Leve sua barbearia para o <span className="text-blue-500">próximo nível.</span>
+              Ative sua conta para <span className="text-blue-500">começar.</span>
             </h1>
             <p className="text-zinc-400 text-lg mt-4">
-              Assine agora e tenha acesso ilimitado a todas as ferramentas de gestão, agenda online e controle financeiro.
+              O BarberFlow é um sistema exclusivo para assinantes. Ative sua assinatura agora para acessar todas as ferramentas.
             </p>
           </div>
 
@@ -91,7 +106,7 @@ export function SubscriptionPage({ barbershop }: SubscriptionPageProps) {
           
           <div className="relative">
             <div className="flex items-baseline gap-2 mb-8">
-              <span className="text-5xl font-bold text-white">R$ 49,90</span>
+              <span className="text-5xl font-bold text-white">R$ 29,90</span>
               <span className="text-zinc-500 font-medium">/mês</span>
             </div>
 
