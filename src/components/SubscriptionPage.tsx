@@ -28,8 +28,10 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
     setRedirecting(true);
     try {
       console.log('Redirecionando para o Link de Pagamento Stripe');
-      // Redireciona diretamente para o Link de Pagamento que você criou
-      window.location.href = 'https://buy.stripe.com/bJedR9eLq8q2ebF3VcaIM01';
+      // Passamos o ID da barbearia para o Stripe como client_reference_id
+      // Isso permite que o sistema saiba QUEM pagou quando o webhook for ativado
+      const stripeUrl = `https://buy.stripe.com/bJedR9eLq8q2ebF3VcaIM01?client_reference_id=${barbershop.id}`;
+      window.location.href = stripeUrl;
     } catch (err) {
       console.error('Erro ao redirecionar:', err);
       setRedirecting(false);

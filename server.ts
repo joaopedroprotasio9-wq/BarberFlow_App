@@ -54,14 +54,20 @@ async function setupServer() {
       switch (event.type) {
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
-          const barbershopId = session.metadata?.barbershopId;
+          // Tenta pegar o ID do metadata ou do client_reference_id (vindo do link direto)
+          const barbershopId = session.metadata?.barbershopId || session.client_reference_id;
+          
           if (barbershopId) {
+            console.log(`Ativando barbearia: ${barbershopId}`);
             await db.collection('barbershops').doc(barbershopId).update({
               subscriptionStatus: 'active',
               stripeCustomerId: session.customer as string,
               stripeSubscriptionId: session.subscription as string,
               subscriptionEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updatedAt: new Date().toISOString()
             });
+          } else {
+            console.warn('Webhook recebido mas nenhum Barbershop ID encontrado na sessão');
           }
           break;
         }
