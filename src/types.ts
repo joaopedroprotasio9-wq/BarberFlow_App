@@ -35,12 +35,24 @@ export interface Client {
   barbershopId: string;
 }
 
+export interface Barber {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  bio?: string;
+  active: boolean;
+  barbershopId: string;
+  workingDays: number[]; // 0-6 (Sunday-Saturday)
+}
+
 export interface Appointment {
   id: string;
   clientId: string;
   clientName: string;
   serviceId: string;
   serviceName: string;
+  barberId: string;
+  barberName: string;
   price: number;
   startTime: string;
   endTime: string;

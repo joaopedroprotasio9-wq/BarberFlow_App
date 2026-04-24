@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, limit, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Barbershop, Service, Appointment, Client } from '../types';
-import { Scissors, Calendar, Clock, User, Phone, CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
-import { format, addMinutes, isSameDay, startOfDay, parse, isAfter, addDays, eachMinuteOfInterval } from 'date-fns';
+import { Barbershop, Service, Appointment, Client, Barber } from '../types';
+import { Scissors, Calendar, Clock, User, Phone, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Star } from 'lucide-react';
+import { format, addMinutes, isSameDay, startOfDay, parse, isAfter, addDays, eachMinuteOfInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 
@@ -13,12 +13,14 @@ export function PublicBooking() {
   const navigate = useNavigate();
   const [barbershop, setBarbershop] = useState<Barbershop | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
 
   // Selection state
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
@@ -27,29 +29,23 @@ export function PublicBooking() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   useEffect(() => {
-    const fetchBarbershop = async () => {
+    const fetchData = async () => {
       if (!slug) return;
       
       try {
-        // 1. Try lookup by slug
         const q = query(collection(db, 'barbershops'), where('slug', '==', slug), limit(1));
         const snap = await getDocs(q);
         
         let bData: Barbershop | null = null;
-        
         if (!snap.empty) {
           bData = { id: snap.docs[0].id, ...snap.docs[0].data() } as Barbershop;
         } else {
-          // 2. Fallback: Try lookup by ID (in case the slug is actually the ID)
           try {
-            const docRef = doc(db, 'barbershops', slug);
             const docSnap = await getDocs(query(collection(db, 'barbershops'), where('__name__', '==', slug), limit(1)));
             if (!docSnap.empty) {
               bData = { id: docSnap.docs[0].id, ...docSnap.docs[0].data() } as Barbershop;
             }
-          } catch (e) {
-            console.error("ID lookup failed:", e);
-          }
+          } catch (e) {}
         }
 
         if (!bData) {
@@ -64,7 +60,12 @@ export function PublicBooking() {
         const snapServices = await getDocs(qServices);
         setServices(snapServices.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service)));
 
-        // Listen to appointments for availability
+        // Fetch barbers
+        const qBarbers = query(collection(db, `barbershops/${bData.id}/barbers`), where('active', '==', true));
+        const snapBarbers = await getDocs(qBarbers);
+        setBarbers(snapBarbers.docs.map(doc => ({ id: doc.id, ...doc.data() } as Barber)));
+
+        // Listen to appointments
         const qApps = query(collection(db, `barbershops/${bData.id}/appointments`), where('status', '==', 'scheduled'));
         const unsubApps = onSnapshot(qApps, (snapApps) => {
           setAppointments(snapApps.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment)));
@@ -73,39 +74,41 @@ export function PublicBooking() {
         setLoading(false);
         return unsubApps;
       } catch (err) {
-        console.error("Error fetching barbershop:", err);
+        console.error("Error fetching data:", err);
         setLoading(false);
       }
     };
 
-    fetchBarbershop();
+    fetchData();
   }, [slug]);
 
   const getAvailableSlots = () => {
-    if (!barbershop || !selectedService) return [];
+    if (!barbershop || !selectedService || !selectedBarber) return [];
 
-    // Fallback for business hours if missing
+    // Check if barber works on the selected day
+    const dayOfWeek = getDay(selectedDate);
+    if (!selectedBarber.workingDays.includes(dayOfWeek)) return [];
+
     const hours = barbershop.businessHours || { start: '09:00', end: '18:00' };
     
     try {
       const start = parse(hours.start, 'HH:mm', selectedDate);
       const end = parse(hours.end, 'HH:mm', selectedDate);
       
-      // Generate slots every 30 minutes
       const slots = eachMinuteOfInterval({ start, end }, { step: 30 });
       const now = new Date();
 
       return slots.filter(slot => {
-        // Don't show past slots for today
         if (isSameDay(slot, now) && !isAfter(slot, now)) return false;
         
         const slotEnd = addMinutes(slot, selectedService.duration);
         
-        // Check for conflicts
         const hasConflict = appointments.some(app => {
+          // Only conflict if it's the SAME barber
+          if (app.barberId !== selectedBarber.id) return false;
+
           const appStart = new Date(app.startTime);
           const appEnd = new Date(app.endTime);
-          // A slot is busy if it overlaps with any existing appointment
           return (slot >= appStart && slot < appEnd) || (slotEnd > appStart && slotEnd <= appEnd);
         });
 
@@ -118,26 +121,16 @@ export function PublicBooking() {
   };
 
   const handleBooking = async () => {
-    if (!barbershop || !selectedService || !selectedTime) {
-      console.warn("Missing data for booking:", { barbershop, selectedService, selectedTime });
-      return;
-    }
+    if (!barbershop || !selectedService || !selectedTime || !selectedBarber) return;
     setIsBooking(true);
 
     try {
-      console.log("Starting booking process for:", clientName, clientPhone);
-      
-      // 1. Find or Create Client
-      const qClient = query(
-        collection(db, `barbershops/${barbershop.id}/clients`),
-        where('phone', '==', clientPhone),
-        limit(1)
-      );
+      // 1. Client lookup/creation
+      const qClient = query(collection(db, `barbershops/${barbershop.id}/clients`), where('phone', '==', clientPhone), limit(1));
       const snapClient = await getDocs(qClient);
       let clientId = '';
       
       if (snapClient.empty) {
-        console.log("Creating new client...");
         const newClient = await addDoc(collection(db, `barbershops/${barbershop.id}/clients`), {
           name: clientName,
           phone: clientPhone,
@@ -150,18 +143,17 @@ export function PublicBooking() {
         clientId = newClient.id;
       } else {
         clientId = snapClient.docs[0].id;
-        console.log("Existing client found:", clientId);
       }
 
-      // 2. Create Appointment
+      // 2. Appointment creation
       const start = parse(selectedTime, 'HH:mm', selectedDate);
       const end = addMinutes(start, selectedService.duration);
-
-      console.log("Creating appointment from", start.toISOString(), "to", end.toISOString());
 
       await addDoc(collection(db, `barbershops/${barbershop.id}/appointments`), {
         clientId,
         clientName,
+        barberId: selectedBarber.id,
+        barberName: selectedBarber.name,
         serviceId: selectedService.id,
         serviceName: selectedService.name,
         price: selectedService.price,
@@ -171,11 +163,10 @@ export function PublicBooking() {
         barbershopId: barbershop.id
       });
 
-      console.log("Booking successful!");
       setBookingSuccess(true);
     } catch (err) {
       console.error("Booking error:", err);
-      alert("Erro ao realizar agendamento. Por favor, tente novamente.");
+      alert("Erro ao realizar agendamento.");
     } finally {
       setIsBooking(false);
     }
@@ -219,6 +210,10 @@ export function PublicBooking() {
               <span className="text-white font-bold">{selectedTime}</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Barbeiro:</span>
+              <span className="text-white font-bold">{selectedBarber?.name}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Barbearia:</span>
               <span className="text-white font-bold">{barbershop.name}</span>
             </div>
@@ -253,7 +248,7 @@ export function PublicBooking() {
       <div className="max-w-md mx-auto p-4 pt-8">
         {/* Progress Bar */}
         <div className="flex items-center justify-between mb-10 px-2">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div key={s} className="flex items-center flex-1 last:flex-none">
               <div className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300",
@@ -261,7 +256,7 @@ export function PublicBooking() {
               )}>
                 {s}
               </div>
-              {s < 3 && (
+              {s < 4 && (
                 <div className={cn(
                   "flex-1 h-0.5 mx-2 rounded-full transition-all duration-300",
                   step > s ? "bg-blue-600" : "bg-zinc-800"
@@ -303,11 +298,63 @@ export function PublicBooking() {
           </div>
         )}
 
-        {/* Step 2: Select Date & Time */}
+        {/* Step 2: Select Barber */}
         {step === 2 && (
-          <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+          <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
             <div className="flex items-center gap-3">
               <button onClick={() => setStep(1)} className="p-2 -ml-2 text-zinc-500 hover:text-white">
+                <ChevronLeft />
+              </button>
+              <h2 className="text-xl font-bold text-white">Escolha o barbeiro</h2>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {barbers
+                .filter(barber => barber.workingDays.includes(getDay(selectedDate)))
+                .map((barber) => (
+                <button
+                  key={barber.id}
+                  onClick={() => {
+                    setSelectedBarber(barber);
+                    setStep(3);
+                  }}
+                  className={cn(
+                    "flex flex-col items-center p-6 rounded-3xl border transition-all text-center group",
+                    selectedBarber?.id === barber.id ? "bg-blue-600/10 border-blue-600" : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
+                  )}
+                >
+                  <div className={cn(
+                    "w-16 h-16 rounded-2xl flex items-center justify-center mb-3 transition-all overflow-hidden",
+                    selectedBarber?.id === barber.id ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-500 group-hover:bg-zinc-700"
+                  )}>
+                    {barber.imageUrl ? (
+                      <img src={barber.imageUrl} alt={barber.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-8 h-8" />
+                    )}
+                  </div>
+                  <h3 className="font-bold text-white group-hover:text-blue-400 transition-colors">{barber.name}</h3>
+                  <div className="flex items-center gap-1 mt-1 text-zinc-500 text-[10px] uppercase font-bold tracking-widest">
+                    <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+                    <span>5.0</span>
+                  </div>
+                </button>
+              ))}
+              
+              {barbers.filter(barber => barber.workingDays.includes(getDay(selectedDate))).length === 0 && (
+                <div className="col-span-full py-10 text-center text-zinc-500">
+                   <p>Nenhum barbeiro disponível para {format(selectedDate, "eeee", { locale: ptBR })}.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Select Date & Time */}
+        {step === 3 && (
+          <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setStep(2)} className="p-2 -ml-2 text-zinc-500 hover:text-white">
                 <ChevronLeft />
               </button>
               <h2 className="text-xl font-bold text-white">Data e Horário</h2>
@@ -361,7 +408,7 @@ export function PublicBooking() {
 
             <button
               disabled={!selectedTime}
-              onClick={() => setStep(3)}
+              onClick={() => setStep(4)}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all"
             >
               Continuar
@@ -369,11 +416,11 @@ export function PublicBooking() {
           </div>
         )}
 
-        {/* Step 3: Client Info */}
-        {step === 3 && (
+        {/* Step 4: Client Info */}
+        {step === 4 && (
           <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
             <div className="flex items-center gap-3">
-              <button onClick={() => setStep(2)} className="p-2 -ml-2 text-zinc-500 hover:text-white">
+              <button onClick={() => setStep(3)} className="p-2 -ml-2 text-zinc-500 hover:text-white">
                 <ChevronLeft />
               </button>
               <h2 className="text-xl font-bold text-white">Seus Dados</h2>
@@ -417,6 +464,10 @@ export function PublicBooking() {
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Serviço:</span>
                   <span className="text-white font-bold">{selectedService?.name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Barbeiro:</span>
+                  <span className="text-white font-bold">{selectedBarber?.name}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Data:</span>

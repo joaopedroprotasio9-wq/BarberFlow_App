@@ -51,10 +51,10 @@ async function setupServer() {
     }
 
     try {
+      const stripe = getStripe();
       switch (event.type) {
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
-          // Tenta pegar o ID do metadata ou do client_reference_id (vindo do link direto)
           const barbershopId = session.metadata?.barbershopId || session.client_reference_id;
           
           if (barbershopId) {
@@ -63,32 +63,30 @@ async function setupServer() {
               subscriptionStatus: 'active',
               stripeCustomerId: session.customer as string,
               stripeSubscriptionId: session.subscription as string,
-              subscriptionEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               updatedAt: new Date().toISOString()
             });
-          } else {
-            console.warn('Webhook recebido mas nenhum Barbershop ID encontrado na sessão');
           }
           break;
         }
         case 'customer.subscription.deleted':
         case 'customer.subscription.updated': {
-          const subObj = event.data.object as any;
-          let targetId = subObj.metadata?.barbershopId;
+          const subscription = event.data.object as Stripe.Subscription;
+          let targetId = subscription.metadata?.barbershopId;
           
           if (!targetId) {
             const snapshot = await db.collection('barbershops')
-              .where('stripeCustomerId', '==', subObj.customer)
+              .where('stripeCustomerId', '==', subscription.customer)
               .limit(1)
               .get();
             if (!snapshot.empty) targetId = snapshot.docs[0].id;
           }
 
           if (targetId) {
-            const status = subObj.status === 'active' ? 'active' : 'inactive';
+            console.log(`Update subscription status for ${targetId}: ${subscription.status}`);
             await db.collection('barbershops').doc(targetId).update({
-              subscriptionStatus: status,
-              subscriptionEndDate: new Date(subObj.current_period_end * 1000).toISOString(),
+              subscriptionStatus: subscription.status,
+              subscriptionEndDate: new Date((subscription as any).current_period_end * 1000).toISOString(),
+              updatedAt: new Date().toISOString()
             });
           }
           break;
@@ -102,6 +100,43 @@ async function setupServer() {
   });
 
   app.use(express.json());
+
+  // Subscription Status Check
+  app.post('/api/verify-subscription', async (req, res) => {
+    const { barbershopId } = req.body;
+    if (!barbershopId) return res.status(400).json({ error: 'barbershopId is required' });
+
+    try {
+      const barbershopDoc = await db.collection('barbershops').doc(barbershopId).get();
+      if (!barbershopDoc.exists) return res.status(404).json({ error: 'Barbershop not found' });
+
+      const data = barbershopDoc.data() || {};
+      const stripeCustomerId = data.stripeCustomerId;
+      const stripeSubscriptionId = data.stripeSubscriptionId;
+
+      if (!stripeCustomerId || !stripeSubscriptionId) {
+        return res.json({ status: data.subscriptionStatus || 'inactive' });
+      }
+
+      const stripe = getStripe();
+      const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any;
+      
+      // Update Firestore with latest status
+      await db.collection('barbershops').doc(barbershopId).update({
+        subscriptionStatus: subscription.status,
+        subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      res.json({ 
+        status: subscription.status,
+        current_period_end: subscription.current_period_end
+      });
+    } catch (err: any) {
+      console.error('Error verifying subscription:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Stripe Checkout Session
   app.post('/api/create-checkout-session', async (req, res) => {
@@ -132,7 +167,7 @@ async function setupServer() {
           },
           unit_amount: 2990, // R$ 29,90
           recurring: {
-            interval: 'month',
+            interval: 'month' as any,
           },
         },
         quantity: 1,

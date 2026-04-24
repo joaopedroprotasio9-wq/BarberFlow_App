@@ -16,6 +16,7 @@ import { Clients } from './components/Clients';
 import { Inventory } from './components/Inventory';
 import { Finance } from './components/Finance';
 import { Services } from './components/Services';
+import { Barbers } from './components/Barbers';
 import { Auth } from './components/Auth';
 import { PublicBooking } from './components/PublicBooking';
 import { SubscriptionPage } from './components/SubscriptionPage';
@@ -39,6 +40,7 @@ function AdminApp({ user, barbershop }: { user: User, barbershop: Barbershop }) 
       case 'agenda': return <Agenda barbershop={barbershop} />;
       case 'clients': return <Clients barbershop={barbershop} />;
       case 'inventory': return <Inventory barbershop={barbershop} />;
+      case 'barbers': return <Barbers barbershop={barbershop} />;
       case 'services': return <Services barbershop={barbershop} />;
       case 'finance': return <Finance barbershop={barbershop} />;
       default: return <Dashboard barbershop={barbershop} />;
@@ -83,7 +85,26 @@ export default function App() {
           
           if (docSnap.exists()) {
             console.log('Barbershop found:', docSnap.data());
-            setBarbershop({ id: docSnap.id, ...docSnap.data() } as Barbershop);
+            const data = docSnap.data() as Barbershop;
+            setBarbershop({ id: docSnap.id, ...data } as Barbershop);
+
+            // Verify subscription status in real-time on login
+            if (data.stripeSubscriptionId) {
+              try {
+                const response = await fetch('/api/verify-subscription', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ barbershopId: user.uid }),
+                });
+                if (response.ok) {
+                  const result = await response.json();
+                  console.log('Subscription verified:', result.status);
+                  setBarbershop(prev => prev ? { ...prev, subscriptionStatus: result.status } : null);
+                }
+              } catch (err) {
+                console.error('Error auto-verifying subscription:', err);
+              }
+            }
           } else {
             console.log('Barbershop not found, creating new profile...');
             // New user, create barbershop profile
@@ -131,8 +152,14 @@ export default function App() {
     );
   }
 
-  if (user && barbershop && barbershop.subscriptionStatus === 'inactive') {
-    return <SubscriptionPage barbershop={barbershop} />;
+  if (user && barbershop) {
+    const blockedStatuses = ['inactive', 'past_due', 'unpaid', 'canceled', 'incomplete_expired'];
+    const isBlocked = blockedStatuses.includes(barbershop.subscriptionStatus || 'inactive');
+    const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
+
+    if (isBlocked || isExpired) {
+      return <SubscriptionPage barbershop={barbershop} />;
+    }
   }
 
   if (error) {

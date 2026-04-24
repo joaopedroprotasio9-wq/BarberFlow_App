@@ -26,31 +26,55 @@ service cloud.firestore {
     }
 
     function isOwner(barbershopId) {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/barbershops/$(barbershopId)).data.ownerUid == request.auth.uid;
+      return isAuthenticated() && (
+        barbershopId == request.auth.uid || 
+        get(/databases/$(database)/documents/barbershops/$(barbershopId)).data.ownerUid == request.auth.uid
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
 
     // Barbershops
     match /barbershops/{barbershopId} {
-      allow read: if true; // Publicly readable for booking
-      allow create: if isAuthenticated() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.ownerUid == request.auth.uid;
+      allow read: if true; 
+      allow create: if isAuthenticated() && incoming().ownerUid == request.auth.uid && isValidId(barbershopId);
+      allow update: if isAuthenticated() && existing().ownerUid == request.auth.uid && incoming().ownerUid == request.auth.uid;
       
       // Sub-collections
       match /clients/{clientId} {
-        allow read: if true; // Allow public to check if they are already a client
-        allow create: if true; // Allow public to register as client
+        allow read: if isOwner(barbershopId);
+        allow create: if true; 
         allow update, delete: if isOwner(barbershopId);
       }
       
+      match /barbers/{barberId} {
+        allow read: if true; 
+        allow create, update, delete: if isOwner(barbershopId);
+      }
+      
       match /appointments/{appointmentId} {
-        allow read: if true; // Publicly readable to check availability
-        allow create: if true; // Allow public to book
+        allow read: if true; 
+        allow create: if true; 
         allow update, delete: if isOwner(barbershopId);
       }
       
       match /services/{serviceId} {
-        allow read: if true; // Publicly readable
+        allow read: if true; 
         allow write: if isOwner(barbershopId);
       }
       

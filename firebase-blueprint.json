@@ -96,6 +96,19 @@
         "barbershopId": { "type": "string" }
       },
       "required": ["productId", "quantity", "totalPrice", "date", "barbershopId"]
+    },
+    "barber": {
+      "title": "Barbeiro",
+      "description": "Membros da equipe da barbearia",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "active": { "type": "boolean" },
+        "workingDays": { "type": "array", "items": { "type": "integer" } },
+        "barbershopId": { "type": "string" }
+      },
+      "required": ["name", "active", "workingDays", "barbershopId"]
     }
   },
   "firestore": {
@@ -106,6 +119,14 @@
     "/barbershops/{barbershopId}/clients/{clientId}": {
       "schema": "client",
       "description": "Clientes vinculados à barbearia"
+    },
+    "/barbershops/{barbershopId}/barbers/{barberId}": {
+      "schema": "barber",
+      "description": "Barbeiros vinculados à barbearia"
+    },
+    "/barbershops/{barbershopId}/services/{serviceId}": {
+      "schema": "service",
+      "description": "Serviços vinculados à barbearia"
     },
     "/barbershops/{barbershopId}/appointments/{appointmentId}": {
       "schema": "appointment",

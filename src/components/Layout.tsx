@@ -42,6 +42,7 @@ export function Layout({ children, currentTab, setCurrentTab, barbershop }: Layo
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'clients', label: 'Clientes', icon: Users },
+    { id: 'barbers', label: 'Barbeiros', icon: Users }, // Using Users icon temporarily, or can use Scissors
     { id: 'services', label: 'Serviços', icon: Scissors },
     { id: 'inventory', label: 'Estoque', icon: Package },
     { id: 'finance', label: 'Financeiro', icon: DollarSign },
