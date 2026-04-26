@@ -53,9 +53,7 @@ export function Layout({ children, currentTab, setCurrentTab, barbershop }: Layo
       {/* Mobile Header */}
       <header className="lg:hidden flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl sticky top-0 z-40">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-            <span className="font-bold text-white">BF</span>
-          </div>
+          <img src="/logo-barberflow.png" alt="" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
           <span className="font-bold text-lg tracking-tight">BarberFlow</span>
         </div>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-zinc-400 hover:text-white transition-colors">
@@ -71,9 +69,7 @@ export function Layout({ children, currentTab, setCurrentTab, barbershop }: Layo
         )}>
           <div className="flex flex-col h-full p-6">
             <div className="hidden lg:flex items-center gap-3 mb-10">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-                <span className="font-bold text-xl text-white">BF</span>
-              </div>
+              <img src="/logo-barberflow.png" alt="" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />
               <div>
                 <h1 className="font-bold text-xl tracking-tight">BarberFlow</h1>
                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">Management System</p>

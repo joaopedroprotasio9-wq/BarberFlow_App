@@ -235,9 +235,7 @@ export function PublicBooking() {
       {/* Header */}
       <div className="bg-zinc-900/50 backdrop-blur-xl border-b border-zinc-800 sticky top-0 z-40 p-4">
         <div className="max-w-md mx-auto flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-            {barbershop.name.charAt(0)}
-          </div>
+          <img src="/logo-barberflow.png" alt="" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />
           <div>
             <h1 className="font-bold text-lg leading-tight">{barbershop.name}</h1>
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Agendamento Online</p>

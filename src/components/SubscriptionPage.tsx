@@ -16,6 +16,12 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
   const isOverdue = ['past_due', 'unpaid'].includes(barbershop.subscriptionStatus || '');
   const isCanceled = barbershop.subscriptionStatus === 'canceled';
   const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
+  
+  const trialDuration = 3 * 24 * 60 * 60 * 1000;
+  const createdAt = new Date(barbershop.createdAt).getTime();
+  const now = new Date().getTime();
+  const isTrialActive = (now - createdAt) < trialDuration;
+  const isTrialExpired = !isTrialActive && barbershop.subscriptionStatus === 'inactive';
 
   React.useEffect(() => {
     if (autoStart) {
@@ -88,10 +94,10 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
         <div className="space-y-8">
           <div>
-            {isOverdue || isExpired ? (
+            {isOverdue || isExpired || isTrialExpired ? (
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-500 text-xs font-bold uppercase tracking-widest mb-4">
                 <AlertTriangle className="w-3 h-3" />
-                Pagamento Atrasado
+                {isTrialExpired ? 'Período de Teste Encerrado' : 'Pagamento Atrasado'}
               </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">
@@ -101,15 +107,17 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
             )}
             
             <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
-              {isOverdue || isExpired ? (
-                <>Assinatura <span className="text-red-500">Bloqueada.</span></>
+              {isOverdue || isExpired || isTrialExpired ? (
+                <>{isTrialExpired ? 'Seu período de teste ' : 'Assinatura '} <span className="text-red-500">{isTrialExpired ? 'terminou.' : 'Bloqueada.'}</span></>
               ) : (
                 <>Ative sua conta para <span className="text-blue-500">começar.</span></>
               )}
             </h1>
             
             <p className="text-zinc-400 text-lg mt-4">
-              {isOverdue || isExpired 
+              {isTrialExpired 
+                ? 'Seus 3 dias de experimentação gratuita acabaram. Assine agora para continuar acessando sua agenda e ferramentas.'
+                : isOverdue || isExpired 
                 ? 'Identificamos uma pendência no seu pagamento. Regularize agora para recuperar o acesso às suas ferramentas.'
                 : 'O BarberFlow é um sistema exclusivo para assinantes. Ative sua assinatura agora para acessar todas as ferramentas.'}
             </p>
@@ -138,12 +146,12 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
           <div className={cn("absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16", (isOverdue || isExpired) ? "bg-red-500/10" : "bg-blue-500/10")}></div>
           
           <div className="relative">
-            {isOverdue || isExpired ? (
+            {isOverdue || isExpired || isTrialExpired ? (
               <div className="flex flex-col gap-2 mb-8">
                 <span className="text-zinc-500 text-sm font-medium">Status da conta</span>
                 <div className="flex items-center gap-2 text-red-500 font-bold text-xl">
                   <Clock className="w-5 h-5" />
-                  Acesso Restrito
+                  {isTrialExpired ? 'Teste Finalizado' : 'Acesso Restrito'}
                 </div>
               </div>
             ) : (
@@ -158,7 +166,7 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
               disabled={loading}
               className={cn(
                 "w-full text-white font-bold py-5 rounded-2xl transition-all flex items-center justify-center gap-3 text-lg shadow-xl",
-                (isOverdue || isExpired) 
+                (isOverdue || isExpired || isTrialExpired) 
                   ? "bg-red-600 hover:bg-red-500 shadow-red-600/20" 
                   : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
               )}
@@ -168,7 +176,7 @@ export function SubscriptionPage({ barbershop, autoStart }: SubscriptionPageProp
               ) : (
                 <>
                   <CreditCard className="w-6 h-6" />
-                  {isOverdue || isExpired ? 'Regularizar Pagamento' : 'Assinar Agora'}
+                  {isTrialExpired ? 'Assinar BarberFlow Agora' : isOverdue || isExpired ? 'Regularizar Pagamento' : 'Assinar Agora'}
                 </>
               )}
             </button>

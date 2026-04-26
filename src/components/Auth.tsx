@@ -4,8 +4,8 @@ import { auth } from '../firebase';
 import { Scissors, Mail, Lock, Chrome, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+export function Auth({ onBack }: { onBack?: () => void }) {
+  const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,18 +57,26 @@ export function Auth() {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px]" />
 
+      {onBack && (
+        <button 
+          onClick={onBack}
+          className="absolute top-8 left-8 text-zinc-500 hover:text-white flex items-center gap-2 transition-colors font-medium z-20"
+        >
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          Voltar para Home
+        </button>
+      )}
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-zinc-900/50 backdrop-blur-2xl border border-zinc-800 p-8 rounded-3xl shadow-2xl relative z-10"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.5)] mb-4">
-            <Scissors className="w-8 h-8 text-white" />
-          </div>
+          <img src="/logo-barberflow.png" alt="" className="w-16 h-16 object-contain mb-4" referrerPolicy="no-referrer" />
           <h1 className="text-3xl font-bold tracking-tight text-white">BarberFlow</h1>
           <p className="text-zinc-400 text-sm mt-2 text-center">
-            {isLogin ? 'Bem-vindo de volta ao futuro da sua barbearia' : 'Comece seu teste grátis de 7 dias hoje'}
+            {isLogin ? 'Bem-vindo de volta ao futuro da sua barbearia' : 'Comece seu teste grátis de 3 dias hoje'}
           </p>
         </div>
 

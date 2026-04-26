@@ -20,6 +20,7 @@ import { Barbers } from './components/Barbers';
 import { Auth } from './components/Auth';
 import { PublicBooking } from './components/PublicBooking';
 import { SubscriptionPage } from './components/SubscriptionPage';
+import { LandingPage } from './components/LandingPage';
 import { Barbershop } from './types';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -29,8 +30,15 @@ function AdminApp({ user, barbershop }: { user: User, barbershop: Barbershop }) 
   // Subscription Guard
   const isSubscribed = barbershop.subscriptionStatus === 'active';
   const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
+  
+  // 3-day Trial Logic
+  const trialDuration = 3 * 24 * 60 * 60 * 1000;
+  const createdAt = new Date(barbershop.createdAt).getTime();
+  const now = new Date().getTime();
+  const isTrialActive = (now - createdAt) < trialDuration;
+  const isTrialExpired = !isTrialActive && barbershop.subscriptionStatus === 'inactive';
 
-  if (!isSubscribed || isExpired) {
+  if ((!isSubscribed && isTrialExpired) || isExpired) {
     return <SubscriptionPage barbershop={barbershop} />;
   }
 
@@ -61,6 +69,7 @@ export default function App() {
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -190,7 +199,15 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/agendar/:slug" element={<PublicBooking />} />
-        <Route path="/" element={user && barbershop ? <AdminApp user={user} barbershop={barbershop} /> : <Auth />} />
+        <Route path="/" element={
+          user && barbershop ? (
+            <AdminApp user={user} barbershop={barbershop} />
+          ) : showAuth ? (
+            <Auth onBack={() => setShowAuth(false)} />
+          ) : (
+            <LandingPage onGetStarted={() => setShowAuth(true)} />
+          )
+        } />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
