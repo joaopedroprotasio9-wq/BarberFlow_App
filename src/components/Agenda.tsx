@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Barbershop, Appointment, Client, Service } from '../types';
-import { Plus, Calendar as CalendarIcon, Clock, User, Scissors, Check, X, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, User, Scissors, Check, X, AlertCircle, Loader2, Trash2, MessageSquare } from 'lucide-react';
 import { format, addMinutes, isSameDay, startOfDay, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -205,6 +205,21 @@ export function Agenda({ barbershop }: AgendaProps) {
 
                     {app.status === 'scheduled' && (
                       <div className="flex items-center gap-2">
+                        {clients.find(c => c.id === app.clientId)?.phone && (
+                          <button 
+                            onClick={() => {
+                              const client = clients.find(c => c.id === app.clientId);
+                              if (!client) return;
+                              const timeStr = format(new Date(app.startTime), 'HH:mm');
+                              const text = encodeURIComponent(`Olá ${client.name}! Seu horário de ${app.serviceName} na BarberFlow está chegando: hoje às ${timeStr}. Se precisar cancelar, por favor nos avise com antecedência. Nos vemos em breve! 💈`);
+                              window.open(`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${text}`, '_blank');
+                            }}
+                            className="p-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white transition-all"
+                            title="Lembrar via WhatsApp"
+                          >
+                            <MessageSquare className="w-5 h-5" />
+                          </button>
+                        )}
                         <button 
                           onClick={() => updateStatus(app.id, 'completed')}
                           className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all"

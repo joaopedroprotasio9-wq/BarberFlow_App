@@ -2,9 +2,10 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import Stripe from 'stripe';
+import stripe from 'stripe';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
+import cron from 'node-cron';
 import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
 
 dotenv.config();
@@ -21,9 +22,58 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// --- SISTEMA DE LEMBRETES AUTOMÁTICOS ---
+// Este robô roda a cada 15 minutos procurando agendamentos daqui a 1 hora
+cron.schedule('*/15 * * * *', async () => {
+  console.log('🤖 Verificando lembretes de agendamento...');
+  const now = new Date();
+  const oneHourFromNowStart = new Date(now.getTime() + 55 * 60 * 1000); // ~55 mins
+  const oneHourFromNowEnd = new Date(now.getTime() + 65 * 60 * 1000);   // ~65 mins
+
+  try {
+    // Buscamos em todas as barbearias (usando collectionGroup para eficiência)
+    const appointmentsSnapshot = await db.collectionGroup('appointments')
+      .where('startTime', '>=', oneHourFromNowStart.toISOString())
+      .where('startTime', '<=', oneHourFromNowEnd.toISOString())
+      .where('status', '==', 'scheduled')
+      .get();
+
+    if (appointmentsSnapshot.empty) {
+      console.log('✅ Nenhum agendamento para lembrar neste ciclo.');
+      return;
+    }
+
+    console.log(`📌 Encontramos ${appointmentsSnapshot.size} agendamentos. Verificando telefones...`);
+
+    for (const appDoc of appointmentsSnapshot.docs) {
+      const app = appDoc.data();
+      const barbershopId = app.barbershopId;
+      
+      // Buscamos os dados do cliente
+      const clientDoc = await db.collection('barbershops').doc(barbershopId).collection('clients').doc(app.clientId).get();
+      const client = clientDoc.data();
+
+      if (client && client.phone) {
+        const phone = client.phone.replace(/\D/g, '');
+        const message = `Olá ${client.name}! Seu horário de ${app.serviceName} está chegando (daqui a 1 hora). Se precisar cancelar, por favor nos avise logo. Até já! 💈`;
+
+        console.log(`📱 [SIMULAÇÃO WHATSAPP] Enviando para: ${phone}`);
+        console.log(`💬 Mensagem: "${message}"`);
+
+        /* 
+           DICA: Para automatizar de verdade, você usaria um serviço como:
+           await axios.post('https://api.seuservico.com/send', { phone, message });
+        */
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro no robô de lembretes:', error);
+  }
+});
+
 const getStripe = () => {
   const key = process.env.STRIPE_SECRET_KEY || 'sk_test_mock';
-  return new Stripe(key, {
+  return new stripe(key, {
     apiVersion: '2025-01-27.acacia' as any,
   });
 };
