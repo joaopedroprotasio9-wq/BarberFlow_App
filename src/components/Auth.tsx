@@ -8,6 +8,7 @@ export function Auth({ onBack }: { onBack?: () => void }) {
   const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,13 +36,24 @@ export function Auth({ onBack }: { onBack?: () => void }) {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLogin && !businessName.trim()) {
+      setError('Por favor, informe o nome da sua barbearia.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Atualiza o displayName do usuário no Auth para que o App.tsx pegue o nome correto
+        await import('firebase/auth').then(({ updateProfile }) => 
+          updateProfile(userCredential.user, { displayName: businessName })
+        );
+        // Recarrega o estado do usuário para garantir que o App.tsx veja o displayName atualizado
+        window.location.reload();
       }
     } catch (err: any) {
       console.error(err);
@@ -87,6 +99,23 @@ export function Auth({ onBack }: { onBack?: () => void }) {
         )}
 
         <form onSubmit={handleEmailAuth} className="space-y-4">
+          {!isLogin && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500 ml-1">Nome da Barbearia</label>
+              <div className="relative">
+                <Scissors className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="text"
+                  required
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Ex: Barber Shop Premium"
+                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-500 ml-1">E-mail</label>
             <div className="relative">

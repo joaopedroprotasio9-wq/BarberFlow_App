@@ -33,7 +33,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     function incoming() {
@@ -52,8 +52,8 @@ service cloud.firestore {
     // Barbershops
     match /barbershops/{barbershopId} {
       allow read: if true; 
-      allow create: if isAuthenticated() && incoming().ownerUid == request.auth.uid && isValidId(barbershopId);
-      allow update: if isAuthenticated() && existing().ownerUid == request.auth.uid && incoming().ownerUid == request.auth.uid;
+      allow create: if isAuthenticated() && barbershopId == request.auth.uid && incoming().ownerUid == request.auth.uid;
+      allow update: if isAuthenticated() && (existing().ownerUid == request.auth.uid || barbershopId == request.auth.uid);
       
       // Sub-collections
       match /clients/{clientId} {

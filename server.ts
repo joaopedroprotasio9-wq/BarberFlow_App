@@ -2,9 +2,10 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import stripe from 'stripe';
+import Stripe from 'stripe';
 import dotenv from 'dotenv';
 import admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import cron from 'node-cron';
 import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
 
@@ -20,7 +21,10 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.firestore();
+// Access specific database if provided, otherwise default
+const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+  ? getFirestore(admin.app(), firebaseConfig.firestoreDatabaseId)
+  : getFirestore();
 
 // --- SISTEMA DE LEMBRETES AUTOMÁTICOS ---
 // Este robô roda a cada 15 minutos procurando agendamentos daqui a 1 hora
@@ -73,7 +77,7 @@ cron.schedule('*/15 * * * *', async () => {
 
 const getStripe = () => {
   const key = process.env.STRIPE_SECRET_KEY || 'sk_test_mock';
-  return new stripe(key, {
+  return new Stripe(key, {
     apiVersion: '2025-01-27.acacia' as any,
   });
 };
