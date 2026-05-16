@@ -27,21 +27,6 @@ import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 function AdminApp({ user, barbershop }: { user: User, barbershop: Barbershop }) {
   const [currentTab, setCurrentTab] = useState('dashboard');
 
-  // Subscription Guard
-  const isSubscribed = barbershop.subscriptionStatus === 'active';
-  const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
-  
-  // 3-day Trial Logic
-  const trialDuration = 3 * 24 * 60 * 60 * 1000;
-  const createdAt = new Date(barbershop.createdAt).getTime();
-  const now = new Date().getTime();
-  const isTrialActive = (now - createdAt) < trialDuration;
-  const isTrialExpired = !isTrialActive && barbershop.subscriptionStatus === 'inactive';
-
-  if ((!isSubscribed && isTrialExpired) || isExpired) {
-    return <SubscriptionPage barbershop={barbershop} />;
-  }
-
   const renderContent = () => {
     switch (currentTab) {
       case 'dashboard': return <Dashboard barbershop={barbershop} />;
@@ -163,10 +148,23 @@ export default function App() {
 
   if (user && barbershop) {
     const blockedStatuses = ['inactive', 'past_due', 'unpaid', 'canceled', 'incomplete_expired'];
-    const isBlocked = blockedStatuses.includes(barbershop.subscriptionStatus || 'inactive');
+    const isSubscribed = barbershop.subscriptionStatus === 'active';
+    
+    // Trial Logic: 3 days from createdAt
+    const trialDuration = 3 * 24 * 60 * 60 * 1000;
+    const createdAt = new Date(barbershop.createdAt).getTime();
+    const now = new Date().getTime();
+    const isTrialActive = (now - createdAt) < trialDuration;
+
     const isExpired = barbershop.subscriptionEndDate ? new Date(barbershop.subscriptionEndDate) < new Date() : false;
 
-    if (isBlocked || isExpired) {
+    // Allow access if subscribed OR trial is still active
+    if (!isSubscribed && !isTrialActive) {
+      return <SubscriptionPage barbershop={barbershop} />;
+    }
+    
+    // Also block if sub was active but now expired (unless in trial, but usually sub happens after trial)
+    if (isExpired && !isTrialActive) {
       return <SubscriptionPage barbershop={barbershop} />;
     }
   }

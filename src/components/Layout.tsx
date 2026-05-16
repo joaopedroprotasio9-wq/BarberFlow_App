@@ -98,6 +98,37 @@ export function Layout({ children, currentTab, setCurrentTab, barbershop }: Layo
               ))}
             </nav>
 
+            {barbershop.subscriptionStatus !== 'active' && (
+              <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2 text-blue-400">
+                  <Package className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Período de Teste</span>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Você tem 3 dias para testar todas as funcionalidades. Aproveite!
+                </p>
+                <div className="mt-3 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                  {(() => {
+                    const total = 3 * 24 * 60 * 60 * 1000;
+                    const elapsed = Date.now() - new Date(barbershop.createdAt).getTime();
+                    const percent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+                    return <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${percent}%` }} />;
+                  })()}
+                </div>
+                <div className="mt-2 flex justify-between items-center text-[10px] font-medium">
+                  <span className="text-zinc-500">Progresso</span>
+                  <span className="text-blue-500">
+                    {(() => {
+                      const total = 3 * 24 * 60 * 60 * 1000;
+                      const remaining = Math.max(0, total - (Date.now() - new Date(barbershop.createdAt).getTime()));
+                      const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+                      return `${days} ${days === 1 ? 'dia' : 'dias'} restantes`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-auto pt-6 border-t border-zinc-800">
               <button 
                 onClick={handleManageSubscription}
